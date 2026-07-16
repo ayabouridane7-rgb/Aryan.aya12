@@ -1,0 +1,554 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>مسار النجوم - Star Runner 3D</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#000; font-family:'Segoe UI', Tahoma, sans-serif; }
+  canvas { display:block; }
+
+  #hud {
+    position:fixed; top:0; left:0; width:100%; padding:20px; pointer-events:none;
+    display:flex; justify-content:space-between; align-items:flex-start; z-index:10;
+  }
+  .stat-box {
+    background:rgba(10,10,30,0.55); border:1px solid rgba(120,180,255,0.35);
+    border-radius:14px; padding:10px 20px; color:#eaf6ff; backdrop-filter: blur(6px);
+    box-shadow:0 0 20px rgba(80,140,255,0.15);
+  }
+  .stat-label { font-size:11px; letter-spacing:2px; color:#7fd8ff; opacity:0.8; }
+  .stat-value { font-size:28px; font-weight:700; text-shadow:0 0 12px rgba(120,200,255,0.8); }
+
+  #center-screen {
+    position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; z-index:20; background:radial-gradient(ellipse at center, rgba(10,10,40,0.85) 0%, rgba(0,0,5,0.97) 75%);
+  }
+  #center-screen.hidden { display:none; }
+
+  .title {
+    font-size:56px; font-weight:800; letter-spacing:4px;
+    background:linear-gradient(90deg,#7ee8fa,#a17efc,#ff7ee8);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    text-shadow:0 0 40px rgba(150,120,255,0.4);
+    margin-bottom:8px;
+  }
+  .subtitle { color:#9fd8ff; font-size:16px; letter-spacing:3px; margin-bottom:36px; opacity:0.85; }
+
+  .btn {
+    pointer-events:auto; cursor:pointer; border:none; outline:none;
+    padding:16px 46px; font-size:18px; font-weight:700; letter-spacing:2px;
+    border-radius:50px; color:#001018;
+    background:linear-gradient(90deg,#7ee8fa,#a17efc);
+    box-shadow:0 0 30px rgba(120,160,255,0.5), inset 0 0 10px rgba(255,255,255,0.4);
+    transition:transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .btn:hover { transform:scale(1.06); box-shadow:0 0 45px rgba(150,180,255,0.8); }
+  .btn:active { transform:scale(0.97); }
+
+  .hint { margin-top:26px; color:#6fa6c9; font-size:13px; letter-spacing:1px; line-height:1.8; }
+  .hint b { color:#a5e6ff; }
+
+  #gameover .title { background:linear-gradient(90deg,#ff7e9f,#ff4e6a); -webkit-background-clip:text; background-clip:text; }
+  #score-final { font-size:22px; color:#fff; margin-bottom:6px; }
+  #score-best { font-size:15px; color:#9fd8ff; margin-bottom:30px; }
+
+  #mobile-controls {
+    position:fixed; bottom:0; left:0; width:100%; display:none;
+    justify-content:space-between; padding:22px; z-index:15; pointer-events:none;
+  }
+  .m-btn {
+    pointer-events:auto; width:78px; height:78px; border-radius:50%;
+    background:rgba(120,180,255,0.15); border:2px solid rgba(150,200,255,0.4);
+    color:#cdefff; font-size:28px; display:flex; align-items:center; justify-content:center;
+    backdrop-filter: blur(4px); user-select:none;
+  }
+  .m-btn:active { background:rgba(150,200,255,0.35); }
+
+  @media (max-width:820px) {
+    #mobile-controls { display:flex; }
+    .title { font-size:38px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <div class="stat-box">
+    <div class="stat-label">النقاط</div>
+    <div class="stat-value" id="score">0</div>
+  </div>
+  <div class="stat-box">
+    <div class="stat-label">أفضل نتيجة</div>
+    <div class="stat-value" id="best">0</div>
+  </div>
+</div>
+
+<div id="center-screen">
+  <div class="title">مسار النجوم</div>
+  <div class="subtitle">STAR RUNNER 3D</div>
+  <button class="btn" id="start-btn">ابدأ اللعب</button>
+  <div class="hint">
+    <b>← →</b> أو <b>A / D</b> للتحرك جانبياً &nbsp;|&nbsp; <b>مسافة / ↑</b> للقفز<br>
+    اقفز فوق العوائق الحمراء، تفادَ الدرونز الأرجوانية المتأرجحة وكرات المدافع الجانبية<br>
+    واجمع البلورات الصفراء لزيادة رصيدك
+  </div>
+</div>
+
+<div id="gameover" class="center-screen" style="display:none; position:fixed; inset:0; z-index:20; flex-direction:column; align-items:center; justify-content:center; text-align:center; background:radial-gradient(ellipse at center, rgba(40,5,15,0.9) 0%, rgba(0,0,5,0.97) 75%);">
+  <div class="title">انتهت اللعبة</div>
+  <div id="score-final">النقاط: 0</div>
+  <div id="score-best">الأفضل: 0</div>
+  <button class="btn" id="retry-btn">إعادة المحاولة</button>
+</div>
+
+<div id="mobile-controls">
+  <div class="m-btn" id="btn-left">◀</div>
+  <div class="m-btn" id="btn-jump">⤒</div>
+  <div class="m-btn" id="btn-right">▶</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+  // ---------- إعداد المشهد ----------
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x05061a, 0.018);
+
+  const camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.1, 1000);
+  camera.position.set(0, 4.2, 8);
+  camera.lookAt(0, 1, -10);
+
+  const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  document.body.appendChild(renderer.domElement);
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // ---------- إضاءة ----------
+  scene.add(new THREE.AmbientLight(0x8899ff, 0.55));
+  const dirLight = new THREE.DirectionalLight(0xaaccff, 1.1);
+  dirLight.position.set(5, 12, 5);
+  dirLight.castShadow = true;
+  dirLight.shadow.mapSize.set(1024,1024);
+  scene.add(dirLight);
+  const rimLight = new THREE.PointLight(0xff7ee8, 1.2, 60);
+  rimLight.position.set(0, 6, -20);
+  scene.add(rimLight);
+
+  // ---------- خلفية نجوم ----------
+  function makeStars(count, size, spread, color) {
+    const geo = new THREE.BufferGeometry();
+    const positions = new Float32Array(count*3);
+    for (let i=0; i<count; i++) {
+      positions[i*3]   = (Math.random()-0.5)*spread;
+      positions[i*3+1] = Math.random()*spread*0.6;
+      positions[i*3+2] = (Math.random()-0.5)*spread;
+    }
+    geo.setAttribute('position', new THREE.BufferAttribute(positions,3));
+    const mat = new THREE.PointsMaterial({ color, size, transparent:true, opacity:0.9 });
+    return new THREE.Points(geo, mat);
+  }
+  const starsFar = makeStars(1200, 0.6, 400, 0x99ccff);
+  const starsNear = makeStars(400, 1.1, 200, 0xff9ee8);
+  scene.add(starsFar, starsNear);
+
+  // ---------- الأرضية (نفق متحرك) ----------
+  const LANE_WIDTH = 3;
+  const lanes = [-LANE_WIDTH, 0, LANE_WIDTH];
+
+  const trackMat = new THREE.MeshStandardMaterial({ color:0x0d1230, emissive:0x1a2560, emissiveIntensity:0.4, metalness:0.6, roughness:0.35 });
+  const trackSegments = [];
+  const SEG_LEN = 20, SEG_COUNT = 6;
+  for (let i=0; i<SEG_COUNT; i++) {
+    const seg = new THREE.Mesh(new THREE.BoxGeometry(LANE_WIDTH*3+1, 0.4, SEG_LEN), trackMat);
+    seg.position.set(0, -0.2, -i*SEG_LEN);
+    seg.receiveShadow = true;
+    scene.add(seg);
+    trackSegments.push(seg);
+
+    // خطوط نيون جانبية
+    [-1,1].forEach(side => {
+      const lineGeo = new THREE.BoxGeometry(0.1, 0.05, SEG_LEN);
+      const lineMat = new THREE.MeshBasicMaterial({ color:0x7ee8fa });
+      const line = new THREE.Mesh(lineGeo, lineMat);
+      line.position.set(side*(LANE_WIDTH*1.5+0.5), 0.02, -i*SEG_LEN);
+      seg.add(line);
+    });
+  }
+
+  // ---------- اللاعب ----------
+  const playerGroup = new THREE.Group();
+  const coreGeo = new THREE.IcosahedronGeometry(0.55, 1);
+  const coreMat = new THREE.MeshStandardMaterial({ color:0x7ee8fa, emissive:0x2a8fbf, emissiveIntensity:0.8, metalness:0.4, roughness:0.2 });
+  const core = new THREE.Mesh(coreGeo, coreMat);
+  core.castShadow = true;
+  playerGroup.add(core);
+  const glow = new THREE.PointLight(0x7ee8fa, 1.5, 6);
+  playerGroup.add(glow);
+  playerGroup.position.set(0, 0.7, 0);
+  scene.add(playerGroup);
+
+  let currentLane = 1; // 0,1,2
+  let targetX = lanes[currentLane];
+  let velocityY = 0;
+  let isJumping = false;
+  const GROUND_Y = 0.7;
+
+  // ---------- العوائق والبلورات ----------
+  const obstacles = [];
+  const crystals = [];
+  const obstacleMat = new THREE.MeshStandardMaterial({ color:0xff4e6a, emissive:0x7a0f1f, emissiveIntensity:0.6, roughness:0.4 });
+  const crystalMat = new THREE.MeshStandardMaterial({ color:0xfff07e, emissive:0xbfa02a, emissiveIntensity:0.9, roughness:0.2, metalness:0.5 });
+
+  function spawnObstacle(z) {
+    const lane = Math.floor(Math.random()*3);
+    const type = Math.random();
+    let mesh;
+    if (type < 0.6) {
+      mesh = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.3, 1.3), obstacleMat);
+      mesh.position.set(lanes[lane], 0.85, z);
+    } else {
+      mesh = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.2, 1.0), obstacleMat);
+      mesh.position.set(lanes[lane], 1.3, z);
+    }
+    mesh.castShadow = true;
+    mesh.userData.lane = lane;
+    scene.add(mesh);
+    obstacles.push(mesh);
+  }
+
+  function spawnCrystal(z) {
+    const lane = Math.floor(Math.random()*3);
+    const mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.35), crystalMat);
+    mesh.position.set(lanes[lane], 1.1, z);
+    mesh.userData.lane = lane;
+    scene.add(mesh);
+    crystals.push(mesh);
+  }
+
+  // ---------- الأعداء المتحركون (درونز) ----------
+  const enemies = [];
+  const droneMat = new THREE.MeshStandardMaterial({ color:0xa259ff, emissive:0x6a1fd6, emissiveIntensity:0.8, metalness:0.5, roughness:0.25 });
+  const droneEyeMat = new THREE.MeshStandardMaterial({ color:0xff3355, emissive:0xff3355, emissiveIntensity:1.5 });
+
+  function spawnEnemy(z) {
+    const group = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.1, 4), droneMat);
+    body.rotation.x = Math.PI;
+    body.castShadow = true;
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8), droneEyeMat);
+    eye.position.set(0, -0.35, 0.4);
+    group.add(body, eye);
+    const baseX = lanes[Math.floor(Math.random()*3)];
+    group.position.set(baseX, 1.5, z);
+    group.userData.baseX = baseX;
+    group.userData.phase = Math.random()*Math.PI*2;
+    scene.add(group);
+    enemies.push(group);
+  }
+
+  // ---------- أبراج المدافع والكرات المتساقطة ----------
+  const turrets = [];
+  const bullets = [];
+  const turretMat = new THREE.MeshStandardMaterial({ color:0x4a5a72, metalness:0.75, roughness:0.3, emissive:0x223349, emissiveIntensity:0.4 });
+  const bulletMat = new THREE.MeshStandardMaterial({ color:0xff5566, emissive:0xff2233, emissiveIntensity:1.4, roughness:0.15 });
+
+  function spawnTurret(z) {
+    const side = Math.random() < 0.5 ? -1 : 1;
+    const group = new THREE.Group();
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.18, 3.4, 8), turretMat);
+    pole.position.y = 1.7;
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.55, 0.9), turretMat);
+    head.position.y = 3.4;
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 1.0, 8), turretMat);
+    barrel.rotation.z = Math.PI/2;
+    barrel.position.set(-side*0.6, 3.4, 0);
+    pole.castShadow = true; head.castShadow = true;
+    group.add(pole, head, barrel);
+    group.position.set(side*(LANE_WIDTH*1.5+1.5), 0, z);
+    group.userData.cooldown = 1.2 + Math.random()*1.4;
+    scene.add(group);
+    turrets.push(group);
+  }
+
+  function fireBullet(turret) {
+    const lane = Math.floor(Math.random()*3);
+    const bullet = new THREE.Mesh(new THREE.SphereGeometry(0.3, 10, 10), bulletMat);
+    bullet.position.set(lanes[lane], 4.6, turret.position.z);
+    bullet.userData.lane = lane;
+    bullet.userData.dead = false;
+    scene.add(bullet);
+    bullets.push(bullet);
+  }
+
+  // ---------- حالة اللعبة ----------
+  let running = false;
+  let speed = 0.22;
+  const baseSpeed = 0.22;
+  let score = 0;
+  let best = parseInt(localStorage.getItem?.('starRunnerBest') || '0') || 0;
+  try { best = Number(window.__best || 0); } catch(e){}
+  let nextSpawnZ = -40;
+  let elapsed = 0;
+
+  document.getElementById('best').textContent = best;
+
+  function resetGame() {
+    obstacles.forEach(o => scene.remove(o));
+    crystals.forEach(c => scene.remove(c));
+    enemies.forEach(e => scene.remove(e));
+    turrets.forEach(t => scene.remove(t));
+    bullets.forEach(b => scene.remove(b));
+    obstacles.length = 0;
+    crystals.length = 0;
+    enemies.length = 0;
+    turrets.length = 0;
+    bullets.length = 0;
+    currentLane = 1;
+    targetX = lanes[currentLane];
+    playerGroup.position.set(0, GROUND_Y, 0);
+    velocityY = 0; isJumping = false;
+    speed = baseSpeed;
+    score = 0;
+    elapsed = 0;
+    nextSpawnZ = -40;
+    for (let z=-40; z>-200; z-=14) {
+      if (Math.random() < 0.7) spawnObstacle(z);
+      if (Math.random() < 0.5) spawnCrystal(z - 5);
+    }
+    for (let z=-55; z>-200; z-=26) {
+      if (Math.random() < 0.65) spawnEnemy(z);
+    }
+    for (let z=-70; z>-200; z-=45) {
+      spawnTurret(z);
+    }
+  }
+
+  function updateHUD() {
+    document.getElementById('score').textContent = Math.floor(score);
+  }
+
+  // ---------- تحكم ----------
+  function moveLane(dir) {
+    currentLane = Math.max(0, Math.min(2, currentLane + dir));
+    targetX = lanes[currentLane];
+  }
+  const JUMP_SPEED = 6.6;
+  const GRAVITY = 15.5;
+  function jump() {
+    if (!isJumping) {
+      isJumping = true;
+      velocityY = JUMP_SPEED;
+    }
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if (!running) return;
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') moveLane(-1);
+    if (e.code === 'ArrowRight' || e.code === 'KeyD') moveLane(1);
+    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') jump();
+  });
+
+  document.getElementById('btn-left').addEventListener('click', () => running && moveLane(-1));
+  document.getElementById('btn-right').addEventListener('click', () => running && moveLane(1));
+  document.getElementById('btn-jump').addEventListener('click', () => running && jump());
+
+  // سحب اللمس (swipe) كخيار إضافي
+  let touchStartX = null, touchStartY = null;
+  renderer.domElement.addEventListener('touchstart', e => {
+    touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY;
+  });
+  renderer.domElement.addEventListener('touchend', e => {
+    if (touchStartX === null || !running) return;
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) moveLane(dx > 0 ? 1 : -1);
+    else if (dy < -40) jump();
+    touchStartX = null;
+  });
+
+  // ---------- شاشات ----------
+  const centerScreen = document.getElementById('center-screen');
+  const gameoverScreen = document.getElementById('gameover');
+
+  function startGame() {
+    resetGame();
+    centerScreen.classList.add('hidden');
+    gameoverScreen.style.display = 'none';
+    running = true;
+  }
+
+  function endGame() {
+    running = false;
+    if (score > best) {
+      best = Math.floor(score);
+      document.getElementById('best').textContent = best;
+      try { localStorage?.setItem('starRunnerBest', best); } catch(e){}
+    }
+    document.getElementById('score-final').textContent = 'النقاط: ' + Math.floor(score);
+    document.getElementById('score-best').textContent = 'الأفضل: ' + best;
+    gameoverScreen.style.display = 'flex';
+  }
+
+  document.getElementById('start-btn').addEventListener('click', startGame);
+  document.getElementById('retry-btn').addEventListener('click', startGame);
+
+  // ---------- حلقة اللعبة ----------
+  const clock = new THREE.Clock();
+  function animate() {
+    requestAnimationFrame(animate);
+    const dt = Math.min(clock.getDelta(), 0.05);
+
+    // دوران نجوم الخلفية وبريق البلورات دائماً
+    starsFar.rotation.y += 0.0006;
+    starsNear.rotation.y += 0.0012;
+    crystals.forEach(c => { c.rotation.y += dt*2; c.rotation.x += dt*1.2; });
+
+    if (running) {
+      elapsed += dt;
+      speed = baseSpeed + Math.min(elapsed*0.004, 0.25);
+      score += speed * 22 * dt * 10;
+      updateHUD();
+
+      // حركة اللاعب الجانبية
+      playerGroup.position.x += (targetX - playerGroup.position.x) * Math.min(1, dt*10);
+      core.rotation.y += dt*3;
+      core.rotation.x += dt*1.5;
+
+      // القفز
+      if (isJumping) {
+        velocityY -= GRAVITY * dt;
+        playerGroup.position.y += velocityY * dt;
+        if (playerGroup.position.y <= GROUND_Y) {
+          playerGroup.position.y = GROUND_Y;
+          isJumping = false;
+          velocityY = 0;
+        }
+      }
+
+      // تحريك المضمار
+      trackSegments.forEach(seg => {
+        seg.position.z += speed;
+        if (seg.position.z > SEG_LEN) seg.position.z -= SEG_LEN*SEG_COUNT;
+      });
+
+      const moveAmt = speed;
+      // تحريك العوائق
+      for (let i = obstacles.length-1; i>=0; i--) {
+        const o = obstacles[i];
+        o.position.z += moveAmt;
+        o.rotation.y += dt*0.5;
+        if (o.position.z > 10) {
+          scene.remove(o);
+          obstacles.splice(i,1);
+          spawnObstacle(o.position.z - SEG_LEN*SEG_COUNT - Math.random()*10);
+          continue;
+        }
+        // تصادم
+        if (Math.abs(o.position.z - playerGroup.position.z) < 0.9 &&
+            o.userData.lane === currentLane &&
+            playerGroup.position.y < o.position.y + 0.9) {
+          endGame();
+        }
+      }
+      // تحريك البلورات
+      for (let i = crystals.length-1; i>=0; i--) {
+        const c = crystals[i];
+        c.position.z += moveAmt;
+        if (c.position.z > 10) {
+          scene.remove(c);
+          crystals.splice(i,1);
+          spawnCrystal(c.position.z - SEG_LEN*SEG_COUNT - Math.random()*10);
+          continue;
+        }
+        if (Math.abs(c.position.z - playerGroup.position.z) < 0.8 &&
+            c.userData.lane === currentLane) {
+          scene.remove(c);
+          crystals.splice(i,1);
+          score += 25;
+          spawnCrystal(c.position.z - SEG_LEN*SEG_COUNT - Math.random()*10);
+        }
+      }
+
+      // تحريك الأعداء المتحركين (يتأرجحون بين المسارات)
+      for (let i = enemies.length-1; i>=0; i--) {
+        const e = enemies[i];
+        e.position.z += moveAmt;
+        e.userData.phase += dt*2.4;
+        e.position.x = e.userData.baseX + Math.sin(e.userData.phase)*2.1;
+        e.position.x = Math.max(-LANE_WIDTH-0.5, Math.min(LANE_WIDTH+0.5, e.position.x));
+        e.rotation.y += dt*1.5;
+        if (e.position.z > 10) {
+          scene.remove(e);
+          enemies.splice(i,1);
+          spawnEnemy(e.position.z - SEG_LEN*SEG_COUNT - Math.random()*20);
+          continue;
+        }
+        if (Math.abs(e.position.z - playerGroup.position.z) < 0.85 &&
+            Math.abs(e.position.x - playerGroup.position.x) < 0.85 &&
+            playerGroup.position.y < e.position.y + 0.75) {
+          endGame();
+        }
+      }
+
+      // تحريك أبراج المدافع وإطلاق الكرات
+      for (let i = turrets.length-1; i>=0; i--) {
+        const t = turrets[i];
+        t.position.z += moveAmt;
+        t.userData.cooldown -= dt;
+        if (t.userData.cooldown <= 0 && running) {
+          fireBullet(t);
+          t.userData.cooldown = 1.6 + Math.random()*1.6;
+        }
+        if (t.position.z > 12) {
+          scene.remove(t);
+          turrets.splice(i,1);
+          spawnTurret(t.position.z - SEG_LEN*SEG_COUNT - Math.random()*20);
+        }
+      }
+
+      // تحريك الكرات المتساقطة وكشف التصادم
+      const FALL_SPEED = 4.2;
+      for (let i = bullets.length-1; i>=0; i--) {
+        const b = bullets[i];
+        b.position.z += moveAmt;
+        b.position.y -= FALL_SPEED * dt;
+        b.rotation.x += dt*4;
+        if (b.position.y <= 0.35 || b.position.z > 10) {
+          scene.remove(b);
+          bullets.splice(i,1);
+          continue;
+        }
+        if (Math.abs(b.position.z - playerGroup.position.z) < 0.7 &&
+            b.userData.lane === currentLane &&
+            Math.abs(b.position.y - playerGroup.position.y) < 0.85) {
+          endGame();
+        }
+      }
+
+      // الكاميرا تتبع بخفة
+      camera.position.x += (playerGroup.position.x*0.4 - camera.position.x)*0.05;
+      rimLight.position.z = playerGroup.position.z - 20;
+    } else {
+      core.rotation.y += dt*0.6;
+    }
+
+    renderer.render(scene, camera);
+  }
+
+  resetGame();
+  animate();
+})();
+</script>
+</body>
+</html>
+
+Le jeu. 16 juil. 2026 à 19:29, Aya Bouridane <ayabouridane7@gmail.com> a écrit :
